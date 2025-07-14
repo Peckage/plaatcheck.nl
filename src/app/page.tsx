@@ -12,10 +12,21 @@ type Gebrek = {
   locatie?: string;
 };
 
-function isAllEmpty(data: any): boolean {
+type RDWData = {
+  base: Record<string, string> | null;
+  fuel: Record<string, string> | null;
+  mileage: Record<string, string> | null;
+  apk: Record<string, string>[];
+  defects: Record<string, Gebrek[]>;
+  specs: Record<string, string> | null;
+  emissions: Record<string, string> | null;
+  wltp: Record<string, string> | null;
+};
+
+function isAllEmpty(data: RDWData | null): boolean {
   if (!data) return true;
 
-  const keys = ['base', 'fuel', 'mileage', 'apk', 'specs', 'emissions', 'wltp'];
+  const keys: (keyof RDWData)[] = ['base', 'fuel', 'mileage', 'apk', 'specs', 'emissions', 'wltp'];
   return keys.every(key => {
     const value = data[key];
     if (Array.isArray(value)) return value.length === 0;
@@ -24,8 +35,7 @@ function isAllEmpty(data: any): boolean {
   });
 }
 
-
-const fetchAllCarData = async (plate: string) => {
+const fetchAllCarData = async (plate: string): Promise<RDWData> => {
   const clean = plate.replaceAll('-', '');
   const urls = {
     base: `https://opendata.rdw.nl/resource/m9d7-ebf2.json?kenteken=${clean}`,
@@ -41,10 +51,10 @@ const fetchAllCarData = async (plate: string) => {
     Object.values(urls).map(url => fetch(url).then(r => r.json()))
   );
 
-  const defects: Record<string, any[]> = {};
+  const defects: Record<string, Gebrek[]> = {};
   if (apk && apk.length > 0) {
     await Promise.all(
-      apk.map(async (entry: any) => {
+      apk.map(async (entry: { rapportnummer?: string }) => {
         if (!entry.rapportnummer) return;
         const res = await fetch(`https://opendata.rdw.nl/resource/hx2c-gt7k.json?rapportnummer=${entry.rapportnummer}`).then(r => r.json());
         defects[entry.rapportnummer] = res;
@@ -56,7 +66,7 @@ const fetchAllCarData = async (plate: string) => {
     base: base[0] || null,
     fuel: fuel[0] || null,
     mileage: mileage[0] || null,
-    apk,
+    apk: apk || [],
     defects,
     specs: specs[0] || null,
     emissions: emissions[0] || null,
@@ -65,12 +75,12 @@ const fetchAllCarData = async (plate: string) => {
 };
 
 export default function Home() {
-  const [plate, setPlate] = useState('');
-  const [data, setData] = useState<any | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [plate, setPlate] = useState<string>('');
+  const [data, setData] = useState<RDWData | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [submitted, setSubmitted] = useState<boolean>(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitted(true);
     setLoading(true);
@@ -105,7 +115,7 @@ export default function Home() {
               placeholder="bijv. A-123-BC"
               className="border border-gray-300 dark:border-gray-700 rounded px-3 py-2 bg-white dark:bg-gray-800 dark:text-white text-center tracking-widest w-full sm:w-40"
               required
-            ></input>
+            />
             <button
               type="submit"
               className="bg-black text-white dark:bg-white dark:text-black px-4 py-2 rounded hover:opacity-80 transition"
@@ -117,63 +127,62 @@ export default function Home() {
         </div>
       </header>
 
-
       <main className="max-w-6xl mx-auto p-6 space-y-10">
         {submitted && !loading && data && !isAllEmpty(data) && (
           <div className="w-full p-6 bg-white dark:bg-gray-900 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 text-sm space-y-8">
-            <StructuredSection title="Voertuiggegevens" data={data.base} fields={{
-              kenteken: "Kenteken",
-              merk: "Merk",
-              handelsbenaming: "Model",
-              voertuigsoort: "Voertuigsoort",
-              inrichting: "Carrosserievorm",
-              eerste_kleur: "Kleur",
-              tweede_kleur: "Secundaire kleur",
-              aantal_deuren: "Aantal deuren",
-              aantal_wielen: "Aantal wielen",
-              aantal_cilinders: "Cilinders",
+            <StructuredSection title="Voertuiggegevens" data={data.base || {}} fields={{
+              kenteken: 'Kenteken',
+              merk: 'Merk',
+              handelsbenaming: 'Model',
+              voertuigsoort: 'Voertuigsoort',
+              inrichting: 'Carrosserievorm',
+              eerste_kleur: 'Kleur',
+              tweede_kleur: 'Secundaire kleur',
+              aantal_deuren: 'Aantal deuren',
+              aantal_wielen: 'Aantal wielen',
+              aantal_cilinders: 'Cilinders',
             }} />
 
-            <StructuredSection title="Registratie & APK" data={data.base} fields={{
-              datum_eerste_toelating: "Datum eerste toelating",
-              datum_tenaamstelling: "Datum tenaamstelling",
-              vervaldatum_apk: "APK vervaldatum",
-              wam_verzekerd: "WAM verzekerd",
-              export_indicator: "Geëxporteerd",
-              openstaande_terugroepactie_indicator: "Terugroepactie?",
-              taxi_indicator: "Taxi?",
-              tenaamstellen_mogelijk: "Tenaamstellen mogelijk",
+            <StructuredSection title="Registratie & APK" data={data.base || {}} fields={{
+              datum_eerste_toelating: 'Datum eerste toelating',
+              datum_tenaamstelling: 'Datum tenaamstelling',
+              vervaldatum_apk: 'APK vervaldatum',
+              wam_verzekerd: 'WAM verzekerd',
+              export_indicator: 'Geëxporteerd',
+              openstaande_terugroepactie_indicator: 'Terugroepactie?',
+              taxi_indicator: 'Taxi?',
+              tenaamstellen_mogelijk: 'Tenaamstellen mogelijk',
             }} />
 
-            <StructuredSection title="Gewicht & Afmetingen" data={data.base} fields={{
-              massa_ledig_voertuig: "Leeggewicht",
-              massa_rijklaar: "Rijklaar gewicht",
-              toegestane_maximum_massa_voertuig: "Toegestane massa",
-              maximum_massa_samenstelling: "Max. massa samenstelling",
-              maximum_massa_trekken_ongeremd: "Trekken ongeremd",
-              maximum_trekken_massa_geremd: "Trekken geremd",
-              wielbasis: "Wielbasis (mm)",
+            <StructuredSection title="Gewicht & Afmetingen" data={data.base || {}} fields={{
+              massa_ledig_voertuig: 'Leeggewicht',
+              massa_rijklaar: 'Rijklaar gewicht',
+              toegestane_maximum_massa_voertuig: 'Toegestane massa',
+              maximum_massa_samenstelling: 'Max. massa samenstelling',
+              maximum_massa_trekken_ongeremd: 'Trekken ongeremd',
+              maximum_trekken_massa_geremd: 'Trekken geremd',
+              wielbasis: 'Wielbasis (mm)',
             }} />
 
-            <StructuredSection title="Motor & Emissie" data={data.fuel} fields={{
-              brandstof_omschrijving: "Brandstof",
-              uitlaatemissieniveau: "Emissieniveau",
-              nettomaximumvermogen: "Vermogen (kW)",
-              toerental_geluidsniveau: "Toerental bij geluidsmeting",
-              geluidsniveau_stationair: "Stationair geluidsniveau (dB)",
-              emissiecode_omschrijving: "Emissiecode",
+            <StructuredSection title="Motor & Emissie" data={data.fuel || {}} fields={{
+              brandstof_omschrijving: 'Brandstof',
+              uitlaatemissieniveau: 'Emissieniveau',
+              nettomaximumvermogen: 'Vermogen (kW)',
+              toerental_geluidsniveau: 'Toerental bij geluidsmeting',
+              geluidsniveau_stationair: 'Stationair geluidsniveau (dB)',
+              emissiecode_omschrijving: 'Emissiecode',
             }} />
 
-            <StructuredSection title="Carrosserie Info" data={data.specs} fields={{
-              type_carrosserie_europese_omschrijving: "Carrosserietype",
-              carrosserietype: "Typecode",
+            <StructuredSection title="Carrosserie Info" data={data.specs || {}} fields={{
+              type_carrosserie_europese_omschrijving: 'Carrosserietype',
+              carrosserietype: 'Typecode',
             }} />
 
             {data.apk && data.apk.length > 0 && (
               <section>
                 <h3 className="text-lg font-semibold mb-2 dark:text-white">APK Keuringen</h3>
                 <div className="space-y-4 dark:text-gray-200">
-                  {data.apk.map((insp: any, i: number) => (
+                  {data.apk.map((insp, i) => (
                     <div key={i} className="p-4 border border-gray-300 dark:border-gray-700 rounded-md">
                       <DataRow label="Vervaldatum" value={formatDate(insp.vervaldatum_keuring)} />
                       <DataRow label="Resultaat" value={insp.keuringsresultaat} />
@@ -182,13 +191,12 @@ export default function Home() {
                         <>
                           <p className="mt-3 font-semibold text-sm text-red-500 dark:text-red-300">Gebreken:</p>
                           <ul className="list-disc list-inside text-sm mt-1">
-                            {data.defects[insp.rapportnummer].map((gebrek: Gebrek, gidx: number) => (
+                            {data.defects[insp.rapportnummer].map((gebrek, gidx) => (
                               <li key={gidx}>
                                 <strong>{gebrek.omschrijving || 'Onbekend gebrek'}</strong>
                                 {(gebrek.soort || gebrek.locatie) && (
                                   <span className="text-gray-400">
-                                    {' '}
-                                    ({[gebrek.soort, gebrek.locatie].filter(Boolean).join(', ')})
+                                    {' '}({[gebrek.soort, gebrek.locatie].filter(Boolean).join(', ')})
                                   </span>
                                 )}
                               </li>
